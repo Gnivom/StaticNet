@@ -11,30 +11,12 @@
 namespace staticnet
 {
 
-  template<typename TMatrix>
-  class MatrixWithFactor
-  {
-  public:
-    using MatrixType = TMatrix;
-    MatrixWithFactor(const TMatrix& Mat, double vFactor): _Mat(Mat), _vFactor(vFactor) {}
-    const TMatrix& _Mat;
-    double _vFactor;
-    operator TMatrix() const
-    {
-      TMatrix Ret = _Mat;
-      Ret *= _vFactor;
-      return Ret;
-    }
-  };
-  template<typename TMatrix>
-  auto GetTranspose(const MatrixWithFactor<TMatrix>& Mat)
-  {
-    return GetTranspose(TMatrix(Mat));
-  }
-  template<bool B, typename LHS, typename RHS>
+  void BringError(double dif);
+
+  template<bool B, class LHS, class RHS>
   struct ConditionalMatrixMultiplication
   {};
-  template<typename LHS, typename RHS>
+  template<class LHS, class RHS>
   struct ConditionalMatrixMultiplication< true, LHS, RHS >
   {
     typedef decltype(typename LHS::MatrixType()* typename RHS::MatrixType()) type;
@@ -71,7 +53,7 @@ namespace staticnet
     };
     constexpr bool IsTooLarge(size_t N)
     {
-      return N > 0;
+      return N > 1000;
     }
   }
 
@@ -82,7 +64,7 @@ namespace staticnet
     typedef Matrix<N, M> MatrixType;
     constexpr static size_t _N = N;
     constexpr static size_t _M = M;
-    using DataType = typename NMatrix::DataType< NMatrix::IsTooLarge(N* M) >;
+    using DataType = typename NMatrix::DataType< NMatrix::IsTooLarge(N * M) >;
 
     explicit Matrix(double v = 0.0): _data(DataType()(SIZET<N>(), SIZET<M>())) { fill(v); }
     //  Matrix(const std::array<double, N>& data) { static_assert(M == 1); for (int n = 0; n<N; ++n) _data[n][0] = data[n]; }
@@ -94,15 +76,14 @@ namespace staticnet
     Matrix& operator=(Matrix&& Other) { _data = std::move(Other._data); return *this; }
 
     Matrix<N, M>& operator-=(const Matrix<N, M>& Other);
-    Matrix<N, M>& operator-=(const MatrixWithFactor<Matrix<N, M>>& Other);
     Matrix<N, M>& operator+=(const Matrix<N, M>& Other);
     Matrix<N, M> operator+(const Matrix<N, M>& Other) const;
     Matrix<N, M> operator-(const Matrix<N, M>& Other) const;
     template<size_t P>
     Matrix<N, P> operator*(const Matrix<M, P>& Other) const;
     std::array<double, N> operator*(const std::array<double, M>& X) const;
-    MatrixWithFactor<Matrix<N, M>> operator*(double x) const;
     Matrix<N, M>& operator*=(double x);
+    Matrix<N, M> operator*(double x) const;
 
     inline auto& operator[] (size_t i) { return _data[i]; }
     inline const auto& operator[] (size_t i) const { return _data[i]; }
@@ -117,8 +98,6 @@ namespace staticnet
     decltype(DataType()(SIZET<N>(), SIZET<M>())) _data;
   };
 
-  void BringError(double dif);
-
   template<size_t N, size_t M>
   Matrix<N, M>& Matrix<N, M>::operator-=(const Matrix<N, M>& Other)
   {
@@ -127,17 +106,6 @@ namespace staticnet
       _data[n][m] -= Other._data[n][m];
       if (Other._data[n][m] > 100 || Other._data[n][m] < -100)
         BringError(Other._data[n][m]);
-    }
-    return *this;
-  }
-  template<size_t N, size_t M>
-  Matrix<N, M>& Matrix<N, M>::operator-=(const MatrixWithFactor<Matrix<N, M>>& Other)
-  {
-    for (int n = 0; n < N; ++n) for (int m = 0; m < M; ++m)
-    {
-      _data[n][m] -= Other._Mat._data[n][m] * Other._vFactor;
-      if (_data[n][m] != _data[n][m] || Other._Mat._data[n][m]*Other._vFactor > 100 || Other._Mat._data[n][m]*Other._vFactor < -100)
-        BringError(Other._Mat._data[n][m]*Other._vFactor);
     }
     return *this;
   }
@@ -223,16 +191,18 @@ namespace staticnet
   }
 
   template<size_t N, size_t M>
-  MatrixWithFactor<Matrix<N, M>> Matrix<N, M>::operator*(double x) const
-  {
-    return MatrixWithFactor<Matrix<N, M>>(*this, x);
-  }
-  template<size_t N, size_t M>
   Matrix<N, M>& Matrix<N, M>::operator*=(double x)
   {
     for (int n = 0; n < N; ++n) for (int m = 0; m < M; ++m)
       (*this)[n][m] *= x;
     return *this;
+  }
+  template<size_t N, size_t M>
+  Matrix<N, M> Matrix<N, M>::operator*(double x) const
+  {
+    Matrix<N, M> ret = *this;
+    ret *= x;
+    return ret;
   }
 
   template<size_t N, size_t M>
@@ -421,11 +391,8 @@ namespace staticnet
     Matrix<N, P> operator*(const Matrix<M, P>& Other) const;
     SparseMatrix& operator-=(const Matrix<N, M>& Other);
     SparseMatrix& operator-=(const SparseMatrix<N, M>& Other);
-    SparseMatrix& operator-=(const MatrixWithFactor<Matrix<N, M>>& Other);
-    SparseMatrix& operator-=(const MatrixWithFactor<SparseMatrix<N, M>>& Other);
     SparseMatrix& operator+=(const SparseMatrix<N, M>& Other);
     SparseMatrix& operator*=(double v);
-    MatrixWithFactor<SparseMatrix> operator*(double v) const;
   };
   template<size_t N, size_t M>
   SparseMatrix<N, M> MakeSparse(const Matrix<N, M>& Mat, bool bDynamic)
@@ -467,14 +434,6 @@ namespace staticnet
     return *this;
   }
   template<size_t N, size_t M>
-  SparseMatrix<N, M>& SparseMatrix<N, M>::operator-=(const MatrixWithFactor<Matrix<N, M>>& Other)
-  {
-    for (auto& entry : _entries)
-      if (entry._bDynamic)
-        entry.value() -= Other._Mat[entry._n][entry._m] * Other._vFactor;
-    return *this;
-  }
-  template<size_t N, size_t M>
   SparseMatrix<N, M>& SparseMatrix<N, M>::operator+=(const SparseMatrix<N, M>& Other)
   {
     if (_entries.size() != Other._entries.size())
@@ -492,16 +451,6 @@ namespace staticnet
     for (int i = 0; i < _entries.size(); ++i)
       if (_entries[i]._bDynamic)
         _entries[i].value() -= Other._entries[i].value();
-    return *this;
-  }
-  template<size_t N, size_t M>
-  SparseMatrix<N, M>& SparseMatrix<N, M>::operator-=(const MatrixWithFactor<SparseMatrix<N, M>>& Other)
-  {
-    if (_entries.size() != Other._Mat._entries.size())
-      std::cerr << "FATAL ERROR: _entries mismatch in CSparseMatrix" << std::endl;
-    for (int i = 0; i < _entries.size(); ++i)
-      if (_entries[i]._bDynamic)
-        _entries[i].value(*this) -= Other._Mat._entries[i].value(Other._Mat) * Other._vFactor;
     return *this;
   }
   template<size_t N, size_t M, size_t P>
@@ -529,13 +478,8 @@ namespace staticnet
         entry.value(*this) *= v;
     return *this;
   }
-  template<size_t N, size_t M>
-  MatrixWithFactor<SparseMatrix<N, M>> SparseMatrix<N, M>::operator*(double v) const
-  {
-    return MatrixWithFactor<SparseMatrix<N, M>>(*this, v);
-  }
 
-  template<typename MatrixT>
+  template<class MatrixT>
   struct MatrixMultiplier{};
   template<size_t N, size_t P>
   struct MatrixMultiplier<Matrix<N, P>>

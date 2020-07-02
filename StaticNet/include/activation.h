@@ -14,18 +14,18 @@ namespace staticnet
 
     struct Linear
     {
-      template<typename T>
+      template<class T>
       const T& f(const T& Mat) const { return Mat; }
-      template<typename T>
+      template<class T>
       double df(const T& Mat) const { return 1.0; }
     };
 
     namespace detail {
       // CRTP
-      template<typename Implementation>
+      template<class Implementation>
       struct ActivationBase
       {
-        template<typename TArray>
+        template<class TArray>
         TArray f(const TArray& Mat) const { return Transform(Mat, static_cast<const Implementation*>(this)->_f); }
         template<size_t N>
         DiagonalMatrix<N> df(const Matrix<N, 1>& Mat) const
@@ -94,7 +94,7 @@ namespace staticnet
           Ret[i] = Mat[i];
         return Ret;
       }
-      template<typename TPropagationData>
+      template<class TPropagationData>
       TPropagationData f(const TPropagationData& Data) const { return TPropagationData(f(Data._data, Data._SizePerDepth*Data._Depth)); }
       struct Gradient {};
       template<size_t N>

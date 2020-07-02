@@ -9,10 +9,10 @@
 using namespace staticnet;
 
 bool produceConstant() {
-  NeuralNetwork network = InputVector<10> {} | DENSE<1> {} | TanH {};
+  NeuralNetwork network = InputVector<10> {} | DENSE<1> {} | activation::TanH {};
 
   const double desiredValue = 0.1337;
-  MeanSquareError<1> lossFunction {{desiredValue}};
+  loss::MeanSquareError<1> lossFunction {{desiredValue}};
 
   double loss = 0.0;
   for (int i = 0; i < 1000; ++i) {
@@ -24,31 +24,31 @@ bool produceConstant() {
 }
 
 bool produceLinear() {
-  NeuralNetwork network = InputVector<10> {} | DENSE<10> {} | Linear {};
+  NeuralNetwork network = InputVector<10> {} | DENSE<10> {} | activation::Linear {};
 
   double loss = 0.0;
 
   for (int i = 0; i < 10000; ++i) {
     InputVector<10> input = Randomize;
-    MeanSquareError lossFunction {input._data};
+    loss::MeanSquareError lossFunction {input._data};
 
     ForwardProp forward(network, input);
     BackwardProp backward(network, forward, lossFunction);
-    backward.UpdateNeuralNet(0.1, 0.0);
+    backward.UpdateNeuralNet(0.001, 0.0);
   }
 
   return loss < 0.00001;
 }
 
 bool categorize() {
-  NeuralNetwork network = InputVector<1> {} | DENSE<2> {} | SoftMax {};
+  NeuralNetwork network = InputVector<1> {} | DENSE<2> {} | activation::SoftMax {};
 
   double loss = 0.0;
 
   for (int i = 0; i < 10000; ++i) {
     InputVector<1> input = Randomize;
     std::array<double, 2> goal = {input._data[0] < 0 ? 0.0 : 1.0, input._data[0] < 0 ? 1.0 : 0.0};
-    CrossEntropy lossFunction {goal};
+    loss::CrossEntropy lossFunction {goal};
     ForwardProp forward(network, input);
     BackwardProp backward(network, forward, lossFunction);
     backward.UpdateNeuralNet(1.0, 0.000001);

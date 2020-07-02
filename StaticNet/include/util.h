@@ -10,12 +10,12 @@
 namespace staticnet
 {
 
-  template<typename T>
+  template<class T>
   constexpr T square(T x)
   {
     return x*x;
   }
-  template<typename T>
+  template<class T>
   constexpr T cube(T x)
   {
     return x*x*x;
@@ -23,7 +23,7 @@ namespace staticnet
 
   unsigned int SafeRand();
 
-  template<typename T>
+  template<class T>
   void KnuthShuffle(T& V)
   {
     const size_t N = V.size();

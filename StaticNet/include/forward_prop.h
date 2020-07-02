@@ -9,7 +9,7 @@
 
 namespace staticnet
 {
-  template<typename TNeuralNet, size_t N = TNeuralNet::_N>
+  template<class TNeuralNet, size_t N = TNeuralNet::_N>
   struct ForwardProp
   {
     constexpr static size_t _N = N;
@@ -28,7 +28,7 @@ namespace staticnet
     AutoVar(_Z, _Layer._W* _X + _Layer._B);
     AutoVar(_Y, _Layer._A.f(_Z));
   };
-  template<typename TNeuralNet>
+  template<class TNeuralNet>
   struct ForwardProp<TNeuralNet, 0>
   {
     const TNeuralNet& _NeuralNet;

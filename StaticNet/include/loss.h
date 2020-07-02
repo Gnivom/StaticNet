@@ -64,7 +64,7 @@ namespace staticnet
       }
     };
 
-    template<typename TGradient, typename TTransposedGradient = typename TGradient::TCrossEntropy::TransposedGradient>
+    template<class TGradient, class TTransposedGradient = typename TGradient::TCrossEntropy::TransposedGradient>
     TTransposedGradient GetTranspose(TGradient&& gradient) {
       return {std::move(gradient._answer), std::move(gradient._guess)};
     }

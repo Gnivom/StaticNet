@@ -1,7 +1,6 @@
 #pragma once
 
 #include "matrix.h"
-#include "propagation_data.h"
 #include "loss.h"
 
 #include <type_traits>
@@ -14,7 +13,7 @@ namespace staticnet
 
   template<size_t N>
   struct DENSE {};
-  template<typename Constructor>
+  template<class Constructor>
   struct SPARSE {};
 
   struct RandomTag {}; inline RandomTag Randomize;
@@ -41,9 +40,9 @@ namespace staticnet
     return ModelStructure(list).prepend(p);
   }
 
-  template<typename T, typename INPUT_TYPE, size_t INPUT_SIZE>
+  template<class T, class INPUT_TYPE, size_t INPUT_SIZE>
   struct MatrixType {};
-  template<size_t N, typename INPUT_TYPE, size_t INPUT_SIZE>
+  template<size_t N, class INPUT_TYPE, size_t INPUT_SIZE>
   struct MatrixType<DENSE<N>, INPUT_TYPE, INPUT_SIZE>
   {
     static auto Create()
@@ -53,31 +52,24 @@ namespace staticnet
       return Ret;
     }
   };
-  template<typename Constructor, typename INPUT_TYPE, size_t INPUT_SIZE>
+  template<class Constructor, class INPUT_TYPE, size_t INPUT_SIZE>
   struct MatrixType<SPARSE<Constructor>, INPUT_TYPE, INPUT_SIZE> {
     static auto Create() { return Constructor::template Create<INPUT_TYPE>(); }
   };
   template<size_t OUT_DEPTH, size_t RADIUS>
   struct CreateConv {
-    template<typename TPropagationData> // Input type
+    template<class TPropagationData> // Input type
     static auto Create()
     {
       return TPropagationData::CreateConvLayer(SIZET<OUT_DEPTH>(), RADIUS);
     }
   };
-  struct CreateInternalizer {
-    template<typename TPropagationData>
-    static auto Create()
-    {
-      return CreateInternalizerLayer<TPropagationData>();
-    }
-  };
 
   ///////////////// The actual neural network
 
-  template<typename... Ts>
+  template<class... Ts>
   struct NeuralNetwork {};
-  template<typename TInput>
+  template<class TInput>
   struct NeuralNetwork<TInput> // 'Layer 0'
   {
     NeuralNetwork(ModelStructure<TInput>){}
@@ -93,7 +85,7 @@ namespace staticnet
     TOut TOutDummy() const { return TOut(); }
     constexpr static size_t NOut = TInput::SIZE;
   };
-  template<typename Activation, typename WType, typename... Ts>
+  template<class Activation, class WType, class... Ts>
   struct NeuralNetwork<Activation, WType, Ts...>
   {
     static_assert(sizeof...(Ts) % 2 == 1, "Neural network types should start with N pairs of (Activation, WType) and end with a InputType");
@@ -115,8 +107,8 @@ namespace staticnet
     NeuralNetwork<Ts...> _Prev;
     constexpr static size_t In = decltype(_Prev)::NOut;
     constexpr static size_t _N = decltype(_Prev)::_N+1;
-    using MatrixType = MatrixType<WType, decltype(_Prev.TOutDummy()), In>;
-    decltype(MatrixType::Create()) _W = MatrixType::Create();
+    using MyMatrixType = MatrixType<WType, decltype(_Prev.TOutDummy()), In>;
+    decltype(MyMatrixType::Create()) _W = MyMatrixType::Create();
     constexpr static size_t NOut = decltype(_W)::_N;
     Matrix<NOut, 1> _B;
     Activation _A;
@@ -130,24 +122,24 @@ namespace staticnet
   template<size_t N>
   struct GetLayer
   {
-    template<typename TLayer>
+    template<class TLayer>
     static auto Get(const TLayer& Network) ->
       typename std::enable_if<N == TLayer::_N, const decltype(Network)&>::type
     {
       return Network;
     }
-    template<typename TLayer>
+    template<class TLayer>
     static auto Get(const TLayer& Network) ->
       typename std::enable_if<N < TLayer::_N, const decltype(Get(Network._Prev))&>::type
     {return Get(Network._Prev);}
 
-    template<typename TLayer>
+    template<class TLayer>
     static auto Access(TLayer& Network) ->
       typename std::enable_if<N == TLayer::_N, decltype(Network)&>::type
     {
       return Network;
     }
-    template<typename TLayer>
+    template<class TLayer>
     static auto Access(TLayer& Network) ->
       typename std::enable_if<N < TLayer::_N, decltype(Access(Network._Prev))&>::type
     {return Access(Network._Prev);}
