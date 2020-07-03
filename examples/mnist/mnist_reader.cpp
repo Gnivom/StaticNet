@@ -7,28 +7,27 @@
 
 namespace
 {
-  int32_t toInt(std::array<std::byte, 4> bts)
-  {
+  int32_t toInt(std::array<char, 4> bts) {
     // MNIST data is stored in high endian
-    auto I = [](std::byte b) { return std::to_integer<int32_t>(b); };
+    auto I = [](char b) { return static_cast<int32_t>(static_cast<unsigned char>(b)); };
     return (I(bts[0]) << 24) | (I(bts[1]) << 16) | (I(bts[2]) << 8) | (I(bts[3]) << 0);
   }
 
-  int32_t readInt(std::basic_ifstream<std::byte>& stream) {
-    std::array<std::byte, 4> buffer;
+  int32_t readInt(std::ifstream& stream) {
+    std::array<char, 4> buffer;
     stream.read(buffer.data(), buffer.size());
     return toInt(buffer);
   }
 
-  unsigned char readChar(std::basic_ifstream<std::byte>& stream){
-    std::byte byte;
+  unsigned char readChar(std::ifstream& stream) {
+    char byte;
     stream.read(&byte, 1);
     return static_cast<unsigned char>(byte);
   }
 
   std::vector<std::array<double, 10>> readLabels(std::filesystem::path file)
   {
-    std::basic_ifstream<std::byte> stream(file, std::ios::binary);
+    std::basic_ifstream<char> stream(file, std::ios::binary);
     if (!stream.is_open()) {
       assert(false && "Error reading mnist. Can't open label file.");
       return {};
@@ -52,7 +51,7 @@ namespace
 
   std::vector<std::array<double, mnist_reader::IMAGE_SIZE>> readImages(std::filesystem::path file)
   {
-    std::basic_ifstream<std::byte> stream(file, std::ios::binary);
+    std::ifstream stream(file, std::ios::binary);
     if (!stream.is_open()) {
       assert(false && "Error reading mnist. Can't open image file.");
       return {};
