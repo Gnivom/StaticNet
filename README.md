@@ -24,3 +24,21 @@ $ mkdir build
 $ cd build
 $ cmake ..
 ```
+
+## Build and run
+
+Use your favourite build system. This is how I do it:
+
+### Visual Studio (Windows)
+
+- Open the solution file in `build/`
+- In the Solution Explorer, right click e.g. `MnistExample` and *Set as startup project*
+- Click *Local Windows Debugger* to build and run.
+
+### Make (Linux)
+
+(Starting from the `build/` directory)
+```
+$ make
+$ (cd examples/mnist && ./MnistExample)
+```
