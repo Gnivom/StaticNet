@@ -73,13 +73,13 @@ int main()
 
   double sgd = mnist_train<SgdOptimizer>(train, test, 10);
   std::cout << "SgdOptimizer: " << sgd << std::endl;
-  assert(sgd > 0.9);
+  assert(sgd > 0.89);
 
   double minibatch = mnist_train<BatchOptimizer>(train, test, 10);
   std::cout << "BatchOptimizer: " << minibatch << std::endl;
-  assert(minibatch > 0.9);
+  assert(minibatch > 0.89);
 
   double momentum = mnist_train<MomentumOptimizer>(train, test, 10);
   std::cout << "MomentumOptimizer: " << momentum << std::endl;
-  assert(momentum > 0.9);
+  assert(momentum > 0.89);
 }
