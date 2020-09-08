@@ -13,8 +13,8 @@ namespace staticnet
 
   template<size_t N>
   struct DENSE {};
-  template<class Constructor>
-  struct SPARSE {};
+  template<size_t HEIGHT, size_t WIDTH, size_t CONV_RADIUS, size_t OUTPUT_DEPTH=1>
+  struct CONVOLUTION2D{};
 
   struct RandomTag {}; inline RandomTag Randomize;
   template<size_t N>
@@ -52,16 +52,38 @@ namespace staticnet
       return Ret;
     }
   };
-  template<class Constructor, class INPUT_TYPE, size_t INPUT_SIZE>
-  struct MatrixType<SPARSE<Constructor>, INPUT_TYPE, INPUT_SIZE> {
-    static auto Create() { return Constructor::template Create<INPUT_TYPE>(); }
-  };
-  template<size_t OUT_DEPTH, size_t RADIUS>
-  struct CreateConv {
-    template<class TPropagationData> // Input type
+  template<size_t HEIGHT, size_t WIDTH, size_t CONV_RADIUS, size_t OUTPUT_DEPTH, class INPUT_TYPE, size_t INPUT_SIZE>
+  struct MatrixType<CONVOLUTION2D<HEIGHT, WIDTH, CONV_RADIUS, OUTPUT_DEPTH>, INPUT_TYPE, INPUT_SIZE> {
+    static_assert(INPUT_SIZE==WIDTH*HEIGHT, "Wrong dimensions on CONVOLUTION2D");
     static auto Create()
     {
-      return TPropagationData::CreateConvLayer(SIZET<OUT_DEPTH>(), RADIUS);
+      constexpr size_t OUTPUT_SIZE_PER_DEPTH = INPUT_SIZE;
+      constexpr size_t NEIGHBORS_PER_INPUT = (CONV_RADIUS*2+1)*(CONV_RADIUS*2+1);
+      SparseMatrix<OUTPUT_SIZE_PER_DEPTH*OUTPUT_DEPTH, INPUT_SIZE, NEIGHBORS_PER_INPUT*OUTPUT_DEPTH> Ret;
+      for (size_t row = 0; row < HEIGHT; ++row) {
+        for (size_t col = 0; col < WIDTH; ++col) {
+          const size_t m = row*WIDTH + col;
+          for (int drow = -int(CONV_RADIUS); drow <= int(CONV_RADIUS); ++drow) {
+            if (int(row) + drow < 0) continue;
+            if (int(row) + drow >= HEIGHT) continue;
+            for (int dcol = -int(CONV_RADIUS); dcol <= int(CONV_RADIUS); ++dcol) {
+              if (int(col) + dcol < 0) continue;
+              if (int(col) + dcol >= WIDTH) continue;
+              const int relativePosition = drow*WIDTH + dcol;
+              const ExplicitIndex sharedIndex(relativePosition + CONV_RADIUS*(WIDTH+1));
+              if (0 > sharedIndex && sharedIndex >= NEIGHBORS_PER_INPUT) {
+                BringError(0.0);
+              }
+              for (size_t out_depth = 0; out_depth < OUTPUT_DEPTH; ++out_depth) {
+                const size_t n = out_depth*OUTPUT_SIZE_PER_DEPTH + m + relativePosition;
+                Ret._entries.emplace_back(n, m, sharedIndex);
+              }
+            }
+          }
+        }
+      }
+      Ret.Randomize();
+      return Ret;
     }
   };
 

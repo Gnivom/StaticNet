@@ -358,44 +358,49 @@ namespace staticnet
     size_t _i;
   };
 
-  template<size_t N, size_t M>
+  template<size_t N, size_t M, size_t NUM_SHARED>
   class SparseMatrix
   {
   private:
-    std::vector<double> _SharedValues;
+    std::array<double, NUM_SHARED> _SharedValues;
   public:
-    typedef SparseMatrix<N, M> MatrixType;
+    typedef SparseMatrix<N, M, NUM_SHARED> MatrixType;
     constexpr static size_t _N = N;
     constexpr static size_t _M = M;
     struct SEntry
     {
-      SEntry(size_t n, size_t m, double v, bool bDynamic): _n(n), _m(m), _v(v), _bDynamic(bDynamic) {}
-      SEntry(size_t n, size_t m, ExplicitIndex nSharedValue, bool bDynamic): _n(n), _m(m), _nSharedValue(nSharedValue), _bDynamic(bDynamic) {}
-      size_t _n; size_t _m; bool _bDynamic;
+      SEntry(size_t n, size_t m, double v): _n(n), _m(m), _v(v) {}
+      SEntry(size_t n, size_t m, ExplicitIndex nSharedValue): _n(n), _m(m), _nSharedValue(nSharedValue) {}
+      size_t _n; size_t _m; // Row and column indices for this entry
       inline double& value(SparseMatrix& parent) { return _nSharedValue == -1 ? _v : parent._SharedValues[_nSharedValue]; }
       inline const double& value(const SparseMatrix& parent) const { return _nSharedValue == -1 ? _v : parent._SharedValues[_nSharedValue]; }
+      inline bool isShared() const { return _nSharedValue != -1; }
     private:
-      double _v = 0.0;
-      size_t _nSharedValue = -1;
+      // TODO: std::variant between _v and _nSharedValue
+      double _v = 0.0; // This entry´s unique value
+      size_t _nSharedValue = -1; // Otherwise, the index of the shared value in _SharedValues
     };
     std::vector< SEntry > _entries;
-    SparseMatrix() {}
+    SparseMatrix() { _SharedValues.fill(0.0); }
     explicit SparseMatrix(std::vector<double> SharedValues): _SharedValues(std::move(SharedValues)) {}
     explicit SparseMatrix(const decltype(_entries)& entries): _entries(entries) {}
 
     void fill(double v) { for (SEntry& entry : _entries) entry.value(*this) = v; }
-    void Randomize() { for (SEntry& entry : _entries) if (entry._bDynamic) entry.value(*this) = GetSignedUnitRand(); }
+    void Randomize() {
+      for (double& val : _SharedValues) val = GetSignedUnitRand();
+      for (SEntry& entry : _entries) if (!entry.isShared()) { entry.value(*this) = GetSignedUnitRand(); }
+    }
 
     std::array<double, N> operator*(const std::array<double, M>& X) const;
     template<size_t P>
     Matrix<N, P> operator*(const Matrix<M, P>& Other) const;
     SparseMatrix& operator-=(const Matrix<N, M>& Other);
-    SparseMatrix& operator-=(const SparseMatrix<N, M>& Other);
-    SparseMatrix& operator+=(const SparseMatrix<N, M>& Other);
+    SparseMatrix& operator-=(const SparseMatrix<N, M, NUM_SHARED>& Other);
+    SparseMatrix& operator+=(const SparseMatrix<N, M, NUM_SHARED>& Other);
     SparseMatrix& operator*=(double v);
   };
-  template<size_t N, size_t M>
-  SparseMatrix<N, M> MakeSparse(const Matrix<N, M>& Mat, bool bDynamic)
+  template<size_t N, size_t M, size_t NUM_SHARED>
+  SparseMatrix<N, M, NUM_SHARED> MakeSparse(const Matrix<N, M>& Mat, bool bDynamic)
   {
     SparseMatrix<N, M> Ret;
     for (int n = 0; n < N; ++n) for (int m = 0; m < M; ++m)
@@ -403,17 +408,17 @@ namespace staticnet
     return Ret;
   }
 
-  template<size_t N, size_t M>
-  std::array<double, N> SparseMatrix<N, M>::operator*(const std::array<double, M>& X) const
+  template<size_t N, size_t M, size_t NUM_SHARED>
+  std::array<double, N> SparseMatrix<N, M, NUM_SHARED>::operator*(const std::array<double, M>& X) const
   {
     std::array<double, N> Ret = {};
     for (const auto& entry : _entries)
       Ret[entry._n] += X[entry._m] * entry.value(*this);
     return Ret;
   }
-  template<size_t N, size_t M>
+  template<size_t N, size_t M, size_t NUM_SHARED>
   template<size_t P>
-  Matrix<N, P> SparseMatrix<N, M>::operator*(const Matrix<M, P>& Other) const
+  Matrix<N, P> SparseMatrix<N, M, NUM_SHARED>::operator*(const Matrix<M, P>& Other) const
   {
     Matrix<N, P> Ret(0.0);
     for (const auto& entry : _entries)
@@ -425,36 +430,34 @@ namespace staticnet
     }
     return Ret;
   }
-  template<size_t N, size_t M>
-  SparseMatrix<N, M>& SparseMatrix<N, M>::operator-=(const Matrix<N, M>& Other)
+  template<size_t N, size_t M, size_t NUM_SHARED>
+  SparseMatrix<N, M, NUM_SHARED>& SparseMatrix<N, M, NUM_SHARED>::operator-=(const Matrix<N, M>& Other)
   {
     for (auto& entry : _entries)
       if (entry._bDynamic)
         entry.value() -= Other[entry._n][entry._m];
     return *this;
   }
-  template<size_t N, size_t M>
-  SparseMatrix<N, M>& SparseMatrix<N, M>::operator+=(const SparseMatrix<N, M>& Other)
+  template<size_t N, size_t M, size_t NUM_SHARED>
+  SparseMatrix<N, M, NUM_SHARED>& SparseMatrix<N, M, NUM_SHARED>::operator+=(const SparseMatrix<N, M, NUM_SHARED>& Other)
   {
     if (_entries.size() != Other._entries.size())
       std::cerr << "FATAL ERROR: _entries mismatch in CSparseMatrix" << std::endl;
     for (int i = 0; i < _entries.size(); ++i)
-      if (_entries[i]._bDynamic)
-        _entries[i].value(*this) += Other._entries[i].value(Other);
+      _entries[i].value(*this) += Other._entries[i].value(Other);
     return *this;
   }
-  template<size_t N, size_t M>
-  SparseMatrix<N, M>& SparseMatrix<N, M>::operator-=(const SparseMatrix<N, M>& Other)
+  template<size_t N, size_t M, size_t NUM_SHARED>
+  SparseMatrix<N, M, NUM_SHARED>& SparseMatrix<N, M, NUM_SHARED>::operator-=(const SparseMatrix<N, M, NUM_SHARED>& Other)
   {
     if (_entries.size() != Other._entries.size())
       std::cerr << "FATAL ERROR: _entries mismatch in CSparseMatrix" << std::endl;
     for (int i = 0; i < _entries.size(); ++i)
-      if (_entries[i]._bDynamic)
-        _entries[i].value() -= Other._entries[i].value();
+      _entries[i].value(*this) -= Other._entries[i].value(Other);
     return *this;
   }
-  template<size_t N, size_t M, size_t P>
-  Matrix<N, P> operator*(const Matrix<N, M>& lhs, const SparseMatrix<M, P>& rhs)
+  template<size_t N, size_t M, size_t P, size_t NUM_SHARED>
+  Matrix<N, P> operator*(const Matrix<N, M>& lhs, const SparseMatrix<M, P, NUM_SHARED>& rhs)
   {
     Matrix<N, P> Ret(0.0);
     for (int n = 0; n < N; ++n)
@@ -470,12 +473,11 @@ namespace staticnet
     }
     return Ret;
   }
-  template<size_t N, size_t M>
-  SparseMatrix<N, M>& SparseMatrix<N, M>::operator*=(double v)
+  template<size_t N, size_t M, size_t NUM_SHARED>
+  SparseMatrix<N, M, NUM_SHARED>& SparseMatrix<N, M, NUM_SHARED>::operator*=(double v)
   {
     for (SEntry& entry : _entries)
-      if (entry._bDynamic)
-        entry.value(*this) *= v;
+      entry.value(*this) *= v;
     return *this;
   }
 
@@ -488,15 +490,15 @@ namespace staticnet
     template<size_t M>
     Matrix<N, P> operator()(const Matrix<N, M>& lhs, const Matrix<M, P>& rhs) const { return lhs * rhs; }
   };
-  template<size_t N, size_t P>
-  struct MatrixMultiplier<SparseMatrix<N, P>>
+  template<size_t N, size_t P, size_t NUM_SHARED>
+  struct MatrixMultiplier<SparseMatrix<N, P, NUM_SHARED>>
   {
-    const SparseMatrix<N, P>& _Filter;
-    MatrixMultiplier(const SparseMatrix<N, P>& Filter): _Filter(Filter) {}
+    SparseMatrix<N, P, NUM_SHARED> _Filter;
+    MatrixMultiplier(SparseMatrix<N, P, NUM_SHARED> Filter): _Filter(std::move(Filter)) {}
     template<size_t M>
-    SparseMatrix<N, P> operator()(const Matrix<N, M>& lhs, const Matrix<M, P>& rhs) const
+    SparseMatrix<N, P, NUM_SHARED> operator()(const Matrix<N, M>& lhs, const Matrix<M, P>& rhs) const
     {
-      SparseMatrix<N, P> Ret;
+      SparseMatrix<N, P, NUM_SHARED> Ret;
       Ret._entries.reserve(_Filter._entries.size());
       for (const auto& FilterEntry : _Filter._entries)
       {
@@ -505,7 +507,7 @@ namespace staticnet
         double vSum = 0.0;
         for (size_t m = 0; m < M; ++m)
           vSum += lhs[n][m] * rhs[m][p];
-        Ret._entries.emplace_back(n, p, vSum, true);
+        Ret._entries.emplace_back(n, p, vSum);
       }
       return Ret;
     }

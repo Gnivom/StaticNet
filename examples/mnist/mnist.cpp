@@ -11,7 +11,9 @@
 #include <fstream>
 #include <utility>
 
-constexpr size_t InputSize = 28 * 28;
+constexpr size_t InputHeight = 28;
+constexpr size_t InputWidth = 28;
+constexpr size_t InputSize = InputHeight * InputWidth;
 
 using namespace mnist_reader;
 using namespace staticnet;
@@ -47,12 +49,43 @@ double evaluate(const MnistDataSet& test, int N, const TNetwork& network)
 }
 
 template<template<class TNetwork, class TLoss> class Optimizer>
-double mnist_train(const MnistDataSet& train, const MnistDataSet& test, int epochs)
+double mnist_train_1layer(const MnistDataSet& train, const MnistDataSet& test, int epochs)
 {
   std::cout << "########## RESET ##########" << std::endl;
 
   NeuralNetwork network = InputVector<InputSize> {} | DENSE<10>{} | activation::SoftMax {};
-  Optimizer optimizer(network);
+  Optimizer optimizer {network};
+
+  for (int e = 0; e < epochs; ++e) {
+    std::cout << evaluate(train, 1000, network) << " " << evaluate(test, 1000, network) << std::endl;
+    optimizer.optimize(digest(train), 0.01);
+  }
+
+  return evaluate(test, 1000, network);
+}
+
+template<template<class TNetwork, class TLoss> class Optimizer>
+double mnist_train_2layer(const MnistDataSet& train, const MnistDataSet& test, int epochs)
+{
+  std::cout << "########## RESET ##########" << std::endl;
+
+  NeuralNetwork network = InputVector<InputSize> {} | DENSE<100>{} | activation::Relu {} | DENSE<10>{} | activation::SoftMax {};
+  Optimizer optimizer {network};
+
+  for (int e = 0; e < epochs; ++e) {
+    std::cout << evaluate(train, 1000, network) << " " << evaluate(test, 1000, network) << std::endl;
+    optimizer.optimize(digest(train), 0.01);
+  }
+
+  return evaluate(test, 1000, network);
+}
+
+template<template<class TNetwork, class TLoss> class Optimizer>
+double mnist_train_cnn(const MnistDataSet& train, const MnistDataSet& test, int epochs)
+{
+  std::cout << "########## RESET ##########" << std::endl;
+  NeuralNetwork network = InputVector<InputSize> {} | CONVOLUTION2D<InputHeight, InputWidth, 1, 1>{} | activation::Relu {} | DENSE<10>{} | activation::SoftMax {};
+  SgdOptimizer optimizer{network};
 
   for (int e = 0; e < epochs; ++e) {
     std::cout << evaluate(train, 1000, network) << " " << evaluate(test, 1000, network) << std::endl;
@@ -71,15 +104,23 @@ int main()
   }();
   const MnistDataSet test = readDataSet("data/t10k-images-idx3-ubyte", "data/t10k-labels-idx1-ubyte");
 
-  double sgd = mnist_train<SgdOptimizer>(train, test, 10);
+  double cnn = mnist_train_cnn<SgdOptimizer>(train, test, 10);
+  std::cout << "CNN: " << cnn << std::endl;
+  assert(cnn > 0.91);
+
+  double sgd = mnist_train_1layer<SgdOptimizer>(train, test, 10);
   std::cout << "SgdOptimizer: " << sgd << std::endl;
   assert(sgd > 0.89);
 
-  double minibatch = mnist_train<BatchOptimizer>(train, test, 10);
+  double minibatch = mnist_train_1layer<BatchOptimizer>(train, test, 10);
   std::cout << "BatchOptimizer: " << minibatch << std::endl;
   assert(minibatch > 0.89);
 
-  double momentum = mnist_train<MomentumOptimizer>(train, test, 10);
+  double momentum = mnist_train_1layer<MomentumOptimizer>(train, test, 10);
   std::cout << "MomentumOptimizer: " << momentum << std::endl;
   assert(momentum > 0.89);
+
+  double doubleLayer = mnist_train_2layer<SgdOptimizer>(train, test, 10);
+  std::cout << "DoubleLayer: " << doubleLayer << std::endl;
+  assert(doubleLayer > 0.94);
 }
