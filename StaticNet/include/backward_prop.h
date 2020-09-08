@@ -24,13 +24,13 @@ namespace staticnet
     BackwardProp(BackwardProp&&) = delete;
 
     struct PortableGradient {
-      decltype(TNeuralNet()._B) _dE_dB;
-      decltype(TNeuralNet()._W) _dE_dW;
+      decltype(GetLayer<N>::Get(TNeuralNet())._B) _dE_dB;
+      decltype(GetLayer<N>::Get(TNeuralNet())._W) _dE_dW;
       typename decltype(_Prev)::PortableGradient _PrevGradient;
       PortableGradient(decltype(_dE_dB) eB, decltype(_dE_dW) eW, decltype(_PrevGradient) prev) : _dE_dB(std::move(eB)), _dE_dW(std::move(eW)), _PrevGradient(std::move(prev)) {}
       PortableGradient() { _dE_dB.fill(0.0); _dE_dW.fill(0.0); }
-      PortableGradient& operator+=(PortableGradient&& o) { _dE_dB += std::move(o._dE_dB); _dE_dW += std::move(o._dE_dW); _Prev += std::move(o._Prev); return *this; }
-      PortableGradient& operator*=(double v) { _dE_dB *= v; _dE_dW *= v; _Prev *= v; return *this; }
+      PortableGradient& operator+=(PortableGradient&& o) { _dE_dB += std::move(o._dE_dB); _dE_dW += std::move(o._dE_dW); _PrevGradient += std::move(o._Prev); return *this; }
+      PortableGradient& operator*=(double v) { _dE_dB *= v; _dE_dW *= v; _PrevGradient *= v; return *this; }
       PortableGradient operator*(double v) && { (*this) *= v; return std::move(*this); }
       PortableGradient operator+(PortableGradient&& o) && { (*this) += std::move(o); return std::move(*this); }
     };
