@@ -61,7 +61,8 @@ namespace staticnet
   class Matrix
   {
   public:
-    typedef Matrix<N, M> MatrixType;
+    using MatrixType = Matrix<N, M>;
+    using GradientType = MatrixType;
     constexpr static size_t _N = N;
     constexpr static size_t _M = M;
     using DataType = typename NMatrix::DataType< NMatrix::IsTooLarge(N * M) >;
@@ -351,45 +352,30 @@ namespace staticnet
     return Ret;
   }
 
-  struct ExplicitIndex
-  {
-    explicit ExplicitIndex(size_t i): _i(i) {}
-    operator size_t() const { return _i; }
-    size_t _i;
-  };
-
   template<size_t N, size_t M, size_t NUM_SHARED>
   class SparseMatrix
   {
   private:
     std::array<double, NUM_SHARED> _SharedValues;
   public:
-    typedef SparseMatrix<N, M, NUM_SHARED> MatrixType;
+    using MatrixType = SparseMatrix<N, M, NUM_SHARED>;
     constexpr static size_t _N = N;
     constexpr static size_t _M = M;
     struct SEntry
     {
-      SEntry(size_t n, size_t m, double v): _n(n), _m(m), _v(v) {}
-      SEntry(size_t n, size_t m, ExplicitIndex nSharedValue): _n(n), _m(m), _nSharedValue(nSharedValue) {}
+      SEntry(size_t n, size_t m, size_t sharedIndex): _n(n), _m(m), _sharedIndex(sharedIndex) {}
+      const size_t _sharedIndex; // The index of the shared value in _SharedValues
       size_t _n; size_t _m; // Row and column indices for this entry
-      inline double& value(SparseMatrix& parent) { return _nSharedValue == -1 ? _v : parent._SharedValues[_nSharedValue]; }
-      inline const double& value(const SparseMatrix& parent) const { return _nSharedValue == -1 ? _v : parent._SharedValues[_nSharedValue]; }
-      inline bool isShared() const { return _nSharedValue != -1; }
-    private:
-      // TODO: std::variant between _v and _nSharedValue
-      double _v = 0.0; // This entry´s unique value
-      size_t _nSharedValue = -1; // Otherwise, the index of the shared value in _SharedValues
+      inline double& value(SparseMatrix& parent) { return parent._SharedValues[_sharedIndex]; }
+      inline const double& value(const SparseMatrix& parent) const { return parent._SharedValues[_sharedIndex]; }
     };
     std::vector< SEntry > _entries;
     SparseMatrix() { _SharedValues.fill(0.0); }
     explicit SparseMatrix(std::vector<double> SharedValues): _SharedValues(std::move(SharedValues)) {}
     explicit SparseMatrix(const decltype(_entries)& entries): _entries(entries) {}
 
-    void fill(double v) { for (SEntry& entry : _entries) entry.value(*this) = v; }
-    void Randomize() {
-      for (double& val : _SharedValues) val = GetSignedUnitRand();
-      for (SEntry& entry : _entries) if (!entry.isShared()) { entry.value(*this) = GetSignedUnitRand(); }
-    }
+    void fill(double v) { for (double& val : _SharedValues) val = v; }
+    void Randomize() { for (double& val : _SharedValues) val = GetSignedUnitRand(); }
 
     std::array<double, N> operator*(const std::array<double, M>& X) const;
     template<size_t P>
@@ -398,15 +384,15 @@ namespace staticnet
     SparseMatrix& operator-=(const SparseMatrix<N, M, NUM_SHARED>& Other);
     SparseMatrix& operator+=(const SparseMatrix<N, M, NUM_SHARED>& Other);
     SparseMatrix& operator*=(double v);
+
+    struct GradientType {
+      GradientType() { _gradients.fill(0.0); }
+      std::array<double, NUM_SHARED> _gradients;
+      GradientType& operator*=(double v) { for (double& g : _gradients) g *= v; return *this; }
+      GradientType& operator+=(const GradientType& o) { for (size_t i = 0; i < NUM_GRADIENTS; ++i) _gradients[i] += o._gradients[i]; return *this; }
+    };
+    SparseMatrix& operator-=(const typename SparseMatrix<N, M, NUM_SHARED>::GradientType& Other);
   };
-  template<size_t N, size_t M, size_t NUM_SHARED>
-  SparseMatrix<N, M, NUM_SHARED> MakeSparse(const Matrix<N, M>& Mat, bool bDynamic)
-  {
-    SparseMatrix<N, M> Ret;
-    for (int n = 0; n < N; ++n) for (int m = 0; m < M; ++m)
-      Ret._entries.emplace_back(n, m, Mat[n][m], bDynamic);
-    return Ret;
-  }
 
   template<size_t N, size_t M, size_t NUM_SHARED>
   std::array<double, N> SparseMatrix<N, M, NUM_SHARED>::operator*(const std::array<double, M>& X) const
@@ -430,32 +416,6 @@ namespace staticnet
     }
     return Ret;
   }
-  template<size_t N, size_t M, size_t NUM_SHARED>
-  SparseMatrix<N, M, NUM_SHARED>& SparseMatrix<N, M, NUM_SHARED>::operator-=(const Matrix<N, M>& Other)
-  {
-    for (auto& entry : _entries)
-      if (entry._bDynamic)
-        entry.value() -= Other[entry._n][entry._m];
-    return *this;
-  }
-  template<size_t N, size_t M, size_t NUM_SHARED>
-  SparseMatrix<N, M, NUM_SHARED>& SparseMatrix<N, M, NUM_SHARED>::operator+=(const SparseMatrix<N, M, NUM_SHARED>& Other)
-  {
-    if (_entries.size() != Other._entries.size())
-      std::cerr << "FATAL ERROR: _entries mismatch in CSparseMatrix" << std::endl;
-    for (int i = 0; i < _entries.size(); ++i)
-      _entries[i].value(*this) += Other._entries[i].value(Other);
-    return *this;
-  }
-  template<size_t N, size_t M, size_t NUM_SHARED>
-  SparseMatrix<N, M, NUM_SHARED>& SparseMatrix<N, M, NUM_SHARED>::operator-=(const SparseMatrix<N, M, NUM_SHARED>& Other)
-  {
-    if (_entries.size() != Other._entries.size())
-      std::cerr << "FATAL ERROR: _entries mismatch in CSparseMatrix" << std::endl;
-    for (int i = 0; i < _entries.size(); ++i)
-      _entries[i].value(*this) -= Other._entries[i].value(Other);
-    return *this;
-  }
   template<size_t N, size_t M, size_t P, size_t NUM_SHARED>
   Matrix<N, P> operator*(const Matrix<N, M>& lhs, const SparseMatrix<M, P, NUM_SHARED>& rhs)
   {
@@ -476,42 +436,17 @@ namespace staticnet
   template<size_t N, size_t M, size_t NUM_SHARED>
   SparseMatrix<N, M, NUM_SHARED>& SparseMatrix<N, M, NUM_SHARED>::operator*=(double v)
   {
-    for (SEntry& entry : _entries)
-      entry.value(*this) *= v;
+    for (double& shared : _SharedValues)
+      shared *= v;
     return *this;
   }
-
-  template<class MatrixT>
-  struct MatrixMultiplier{};
-  template<size_t N, size_t P>
-  struct MatrixMultiplier<Matrix<N, P>>
+  template<size_t N, size_t M, size_t NUM_SHARED>
+  SparseMatrix<N, M, NUM_SHARED>& SparseMatrix<N, M, NUM_SHARED>::operator-=(const typename SparseMatrix<N, M, NUM_SHARED>::GradientType& Other)
   {
-    MatrixMultiplier(const Matrix<N, P>& Filter) {}
-    template<size_t M>
-    Matrix<N, P> operator()(const Matrix<N, M>& lhs, const Matrix<M, P>& rhs) const { return lhs * rhs; }
-  };
-  template<size_t N, size_t P, size_t NUM_SHARED>
-  struct MatrixMultiplier<SparseMatrix<N, P, NUM_SHARED>>
-  {
-    SparseMatrix<N, P, NUM_SHARED> _Filter;
-    MatrixMultiplier(SparseMatrix<N, P, NUM_SHARED> Filter): _Filter(std::move(Filter)) {}
-    template<size_t M>
-    SparseMatrix<N, P, NUM_SHARED> operator()(const Matrix<N, M>& lhs, const Matrix<M, P>& rhs) const
-    {
-      SparseMatrix<N, P, NUM_SHARED> Ret;
-      Ret._entries.reserve(_Filter._entries.size());
-      for (const auto& FilterEntry : _Filter._entries)
-      {
-        const size_t n = FilterEntry._n;
-        const size_t p = FilterEntry._m;
-        double vSum = 0.0;
-        for (size_t m = 0; m < M; ++m)
-          vSum += lhs[n][m] * rhs[m][p];
-        Ret._entries.emplace_back(n, p, vSum);
-      }
-      return Ret;
-    }
-  };
+    for (size_t i = 0; i < NUM_SHARED; ++i)
+      _SharedValues[i] -= Other._gradients[i];
+    return *this;
+  }
 
   template<size_t N>
   std::array<double, N> operator-(const std::array<double, N> lhs, const std::array<double, N> rhs)
