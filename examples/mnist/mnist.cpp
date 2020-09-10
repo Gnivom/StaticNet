@@ -104,10 +104,6 @@ int main()
   }();
   const MnistDataSet test = readDataSet("data/t10k-images-idx3-ubyte", "data/t10k-labels-idx1-ubyte");
 
-  double cnn = mnist_train_cnn<BatchOptimizer>(train, test, 10);
-  std::cout << "CNN: " << cnn << std::endl;
-  assert(cnn > 0.91);
-
   double sgd = mnist_train_1layer<SgdOptimizer>(train, test, 10);
   std::cout << "SgdOptimizer: " << sgd << std::endl;
   assert(sgd > 0.89);
@@ -123,4 +119,8 @@ int main()
   double doubleLayer = mnist_train_2layer<SgdOptimizer>(train, test, 10);
   std::cout << "DoubleLayer: " << doubleLayer << std::endl;
   assert(doubleLayer > 0.94);
+
+  double cnn = mnist_train_cnn<SgdOptimizer>(train, test, 10);
+  std::cout << "CNN: " << cnn << std::endl;
+  assert(cnn > 0.91);
 }

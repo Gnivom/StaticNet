@@ -25,11 +25,11 @@ namespace staticnet
     using MatrixType = SparseMatrix<N, M, NUM_SHARED>;
     using GradientType = typename MatrixType::GradientType;
     GradientCast(const MatrixType& base) : _base(base) {}
-    GradientType operator()(const Matrix<M, N>& grad) && { // Only on rvalues to discourage dangling _base
+    GradientType operator()(const Matrix<N, M>& grad) && { // Only on rvalues to discourage dangling _base
       GradientType Ret;
       for (const MatrixType::SEntry& entry: _base._entries) {
         constexpr double scaleFactor = 1.0 / N; // To compensate for N outputs depending on the same shared value
-        Ret._gradients[entry._sharedIndex] += grad[entry._m][entry._n] * scaleFactor;
+        Ret._gradients[entry._sharedIndex] += grad[entry._n][entry._m] * scaleFactor;
       }
       return Ret;
     }

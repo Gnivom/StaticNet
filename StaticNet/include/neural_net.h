@@ -70,8 +70,8 @@ namespace staticnet
               if (int(col) + dcol < 0) continue;
               if (int(col) + dcol >= WIDTH) continue;
               const int relativePosition = drow*WIDTH + dcol;
-              const size_t sharedIndex = relativePosition + CONV_RADIUS*(WIDTH+1);
-              if (0 > sharedIndex && sharedIndex >= NEIGHBORS_PER_INPUT) {
+              const size_t sharedIndex = (drow+CONV_RADIUS)*(2*CONV_RADIUS+1)+dcol+CONV_RADIUS;
+              if (sharedIndex >= NEIGHBORS_PER_INPUT) {
                 BringError(0.0);
               }
               for (size_t out_depth = 0; out_depth < OUTPUT_DEPTH; ++out_depth) {
