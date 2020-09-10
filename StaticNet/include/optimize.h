@@ -9,6 +9,8 @@
 #include <cassert>
 #include <vector>
 #include <optional>
+#include <future>
+#include <algorithm>
 
 namespace staticnet {
 
@@ -56,20 +58,33 @@ namespace staticnet {
     using TInputs = std::vector<typename TNetwork::InputType>;
     using TOutputs = std::vector<typename TNetwork::TOut>;
   public:
-    explicit BatchOptimizer(TNetwork& network, int batchSize = 100) : Parent(network), _batchSize(batchSize) {}
+    explicit BatchOptimizer(TNetwork& network, int batchSize = 256) : Parent(network), _batchSize(batchSize) {}
     void optimize(std::pair<TInputs, TOutputs> insOuts, double vLearnRate, double vDecay = 0.0)
     {
       auto [inputs, correctOutput] = insOuts;
-      int i = 0;
-      for (int batch = 0; i < inputs.size(); ++batch)
-      {
-        typename BackwardProp<TNetwork, TLossFunction>::PortableGradient gradientSum;
-        for (int bi = 0; bi < _batchSize && i < inputs.size(); ++bi, ++i) {
-          TLossFunction lossFunction {correctOutput[i]};
-          ForwardProp forward(this->_network, inputs[i]);
-          BackwardProp backward(this->_network, forward, lossFunction);
-          gradientSum += backward.GetGradient();
+
+      using PortableGradient = typename BackwardProp<TNetwork, TLossFunction>::PortableGradient;
+      const int NUM_THREADS = 24;
+
+      for (int batch = 0; batch*_batchSize < inputs.size(); ++batch) {
+        const int begin = batch*_batchSize;
+        const int end = std::min((batch+1)*_batchSize, int(inputs.size()));
+        std::vector<std::future<PortableGradient>> futures;
+        for (int ti = 0; ti < NUM_THREADS; ++ti) {
+          futures.push_back(std::async([&, ti]{
+            PortableGradient gradientSum;
+            for (int i = begin + ti; i < end; i += NUM_THREADS) {
+              TLossFunction lossFunction {correctOutput[i]};
+              ForwardProp forward(this->_network, inputs[i]);
+              BackwardProp backward(this->_network, forward, lossFunction);
+              gradientSum += backward.GetGradient();
+            }
+            return gradientSum;
+          }));
         }
+        PortableGradient gradientSum;
+        for (auto& f : futures)
+          gradientSum += f.get();
         // TODO: don't have to regenerate a BackwardProp
         TLossFunction lossFunction {correctOutput[0]};
         ForwardProp forward(this->_network, inputs[0]);

@@ -7,6 +7,7 @@
 #include <iostream>
 #include <cmath>
 #include <memory>
+#include <cassert>
 
 namespace staticnet
 {
@@ -363,7 +364,7 @@ namespace staticnet
     constexpr static size_t _M = M;
     struct SEntry
     {
-      SEntry(size_t n, size_t m, size_t sharedIndex): _n(n), _m(m), _sharedIndex(sharedIndex) {}
+      SEntry(size_t n, size_t m, size_t sharedIndex): _n(n), _m(m), _sharedIndex(sharedIndex) { assert(sharedIndex < NUM_SHARED); }
       const size_t _sharedIndex; // The index of the shared value in _SharedValues
       size_t _n; size_t _m; // Row and column indices for this entry
       inline double& value(SparseMatrix& parent) { return parent._SharedValues[_sharedIndex]; }
@@ -389,7 +390,8 @@ namespace staticnet
       GradientType() { _gradients.fill(0.0); }
       std::array<double, NUM_SHARED> _gradients;
       GradientType& operator*=(double v) { for (double& g : _gradients) g *= v; return *this; }
-      GradientType& operator+=(const GradientType& o) { for (size_t i = 0; i < NUM_GRADIENTS; ++i) _gradients[i] += o._gradients[i]; return *this; }
+      GradientType& operator+=(const GradientType& o) { for (size_t i = 0; i < NUM_SHARED; ++i) _gradients[i] += o._gradients[i]; return *this; }
+      void fill(double v) { _gradients.fill(v); }
     };
     SparseMatrix& operator-=(const typename SparseMatrix<N, M, NUM_SHARED>::GradientType& Other);
   };

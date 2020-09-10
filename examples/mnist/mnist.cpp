@@ -85,11 +85,11 @@ double mnist_train_cnn(const MnistDataSet& train, const MnistDataSet& test, int 
 {
   std::cout << "########## RESET ##########" << std::endl;
   NeuralNetwork network = InputVector<InputSize> {} | CONVOLUTION2D<InputHeight, InputWidth, 1, 1>{} | activation::Relu {} | DENSE<10>{} | activation::SoftMax {};
-  SgdOptimizer optimizer{network};
+  Optimizer optimizer{network};
 
   for (int e = 0; e < epochs; ++e) {
     std::cout << evaluate(train, 1000, network) << " " << evaluate(test, 1000, network) << std::endl;
-    optimizer.optimize(digest(train), 0.01);
+    optimizer.optimize(digest(train), 0.1);
   }
 
   return evaluate(test, 1000, network);
@@ -104,7 +104,7 @@ int main()
   }();
   const MnistDataSet test = readDataSet("data/t10k-images-idx3-ubyte", "data/t10k-labels-idx1-ubyte");
 
-  double cnn = mnist_train_cnn<SgdOptimizer>(train, test, 10);
+  double cnn = mnist_train_cnn<BatchOptimizer>(train, test, 10);
   std::cout << "CNN: " << cnn << std::endl;
   assert(cnn > 0.91);
 
